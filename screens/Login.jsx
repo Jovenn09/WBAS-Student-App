@@ -66,10 +66,19 @@ export default function Login() {
 
         if (error) throw new Error(error.message);
 
-        if (data.user.user_metadata?.access !== "student")
+        if (data.user.user_metadata?.access !== "student") {
+          await supabase.auth.signOut();
           throw new Error("You are not authorize");
+        }
 
-        setUser(data.user);
+        let { data: students, error: studentError } = await supabase
+          .from("students")
+          .select("student_id")
+          .eq("uuid", data.user.id);
+
+        if (studentError) throw new Error("Can't sign you in");
+
+        setUser({ student_id: students[0].student_id, ...data.user });
       } catch (error) {
         Alert.alert("Something Went Wrong", error.message);
       } finally {

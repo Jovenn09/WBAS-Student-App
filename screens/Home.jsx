@@ -25,6 +25,10 @@ export default function Home() {
   const { user } = useContext(AuthContext);
   const [name, setName] = useState("");
 
+  useEffect(() => {
+    console.log(JSON.stringify(user, null, 2));
+  }, [user]);
+
   const [attendanceRecord, setAttendanceRecord] = useState([]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -66,7 +70,7 @@ export default function Home() {
     `,
         { count: "exact" }
       )
-      .eq("student_id", user.id)
+      .eq("student_id", user.student_id)
       .eq("attendance_status", "absent")
       .order("timestamp", { ascending: false });
 
@@ -119,7 +123,7 @@ export default function Home() {
         )
         .order("timestamp", { ascending: false })
         .eq("attendance_status", "absent")
-        .eq("student_id", user.id)
+        .eq("student_id", user.student_id)
         .ilike("subject_id", `%${selectedSubject}%`)
         .range(0, 5);
 
@@ -149,7 +153,7 @@ export default function Home() {
       )
       `
       )
-      .eq("student_id", user.id);
+      .eq("student_id", user.student_id);
 
     if (error) return console.log(error);
 
@@ -175,7 +179,7 @@ export default function Home() {
           event: "INSERT",
           schema: "public",
           table: "attendance",
-          filter: `student_id=eq.${user.id}`,
+          filter: `student_id=eq.${user.student_id}`,
         },
         (payload) => {
           console.log(payload);
@@ -214,7 +218,7 @@ export default function Home() {
       .from("attendance")
       .select("*", { count: "exact", head: true })
       .eq("attendance_status", "absent")
-      .eq("student_id", user.id);
+      .eq("student_id", user.student_id);
     if (count > 2) {
       ToastAndroid.show(
         "You have already 3 absences. Please take note of your attendance",

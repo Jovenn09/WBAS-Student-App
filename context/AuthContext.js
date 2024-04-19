@@ -14,7 +14,20 @@ export function AuthContextProvider({ children }) {
     const getSession = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error) console.log(error.message);
-      setUser(data.user);
+
+      if (data.user?.user_metadata?.access === "student") {
+        let { data: students, error: studentError } = await supabase
+          .from("students")
+          .select("student_id")
+          .eq("uuid", data.user.id);
+
+        if (studentError) console.log(error.message);
+
+        setUser({ student_id: students[0].student_id, ...data.user });
+      } else {
+        setUser(data.user);
+      }
+
       setLoading(false);
     };
     getSession();
