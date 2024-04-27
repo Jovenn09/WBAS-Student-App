@@ -25,13 +25,11 @@ export default function Home() {
   const { user } = useContext(AuthContext);
   const [name, setName] = useState("");
 
-  useEffect(() => {
-    console.log(JSON.stringify(user, null, 2));
-  }, [user]);
-
   const [attendanceRecord, setAttendanceRecord] = useState([]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
   const [date, setDate] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
@@ -45,16 +43,29 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isReachEnd, setIsReachEnd] = useState(false);
 
-  function onChangeDateHandler(event, selectedDate) {
-    setShowDatePicker(false);
-    if (event.type === "set") {
-      console.log(selectedDate);
-      setDate(selectedDate);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+
+  const [subjectTotalAttendance, setSubjectTotalAttendance] = useState([]);
+  const [totalAbsences, setTotalAbsences] = useState(0);
+
+  function onChangeDateHandler(event, selectedDate, isStart) {
+    if (isStart) {
+      setShowDatePicker(false);
+      if (event.type === "set") {
+        setStartDate(selectedDate);
+      }
+    } else {
+      setShowEndDatePicker(false);
+      if (event.type === "set") {
+        setEndDate(selectedDate);
+      }
     }
   }
 
-  function onDatePressHandler() {
-    setShowDatePicker(true);
+  function onDatePressHandler(isStart) {
+    if (isStart) setShowDatePicker(true);
+    else setShowEndDatePicker(true);
   }
 
   async function onReachEndHandler() {
@@ -77,10 +88,7 @@ export default function Home() {
     const numOfFetch = numOfLoad + 1;
     const numOfPage = Math.ceil(numOfItem / numOfLoadItem);
 
-    console.log(numOfFetch, numOfPage);
     if (numOfFetch >= numOfPage) return;
-
-    console.log("pass");
 
     setIsReachEnd(true);
 
@@ -88,7 +96,11 @@ export default function Home() {
     const end = (numOfFetch + 1) * numOfLoadItem;
 
     query.ilike("subject_id", `%${selectedSubject}%`);
-    if (date) query.eq("date", format(date, "yyyy-MM-dd"));
+    if (endDate && startDate) {
+      query
+        .lte("date", format(endDate, "yyyy-MM-dd"))
+        .gte("date", format(startDate, "yyyy-MM-dd"));
+    }
     query.range(start, end);
 
     const { data, error } = await query;
@@ -99,10 +111,6 @@ export default function Home() {
     }
     setIsReachEnd(false);
   }
-
-  useEffect(() => {
-    console.log(numOfLoad);
-  }, [numOfLoad]);
 
   async function getAttendance() {
     try {
@@ -127,7 +135,10 @@ export default function Home() {
         .ilike("subject_id", `%${selectedSubject}%`)
         .range(0, 5);
 
-      if (date) query.eq("date", format(date, "yyyy-MM-dd"));
+      if (endDate && startDate)
+        query
+          .lte("date", format(endDate, "yyyy-MM-dd"))
+          .gte("date", format(startDate, "yyyy-MM-dd"));
 
       const { data, error, count } = await query;
 
@@ -182,7 +193,6 @@ export default function Home() {
           filter: `student_id=eq.${user.student_id}`,
         },
         (payload) => {
-          console.log(payload);
           setRefresh((prev) => prev + 1);
         }
       )
@@ -195,7 +205,13 @@ export default function Home() {
 
   useEffect(() => {
     getAttendance();
-  }, [date, selectedSubject, refresh]);
+  }, [selectedSubject, refresh]);
+
+  useEffect(() => {
+    if (startDate && endDate) {
+      getAttendance();
+    }
+  }, [startDate, endDate]);
 
   useEffect(() => {
     const getStudentName = async () => {
@@ -208,7 +224,6 @@ export default function Home() {
 
       const name = data[0]?.name || "";
       setName(name);
-      console.log(name);
     };
     getStudentName();
   }, []);
@@ -231,6 +246,37 @@ export default function Home() {
     checkAttendanceNumber();
   }, []);
 
+  async function getTotalAbsentsBySubject() {
+    const { count } = await supabase
+      .from("attendance")
+      .select("*", { count: "exact", head: true })
+      .eq("student_id", user.student_id);
+
+    setTotalAbsences(count);
+
+    const data = await Promise.all(
+      subjects.map(async (item) => {
+        const { count } = await supabase
+          .from("attendance")
+          .select("*", { count: "exact", head: true })
+          .eq("subject_id", item.id)
+          .eq("student_id", user.student_id);
+
+        return {
+          count,
+          name: `${item.description}`,
+        };
+      })
+    );
+
+    setSubjectTotalAttendance(data);
+  }
+
+  useEffect(() => {
+    if (!subjects.length) return;
+    getTotalAbsentsBySubject();
+  }, [subjects]);
+
   return (
     <View>
       <Text
@@ -251,20 +297,40 @@ export default function Home() {
       </Text>
       <View
         style={{
-          flexDirection: "row",
           justifyContent: "center",
           gap: 18,
           marginVertical: 8,
           flexWrap: "wrap",
+          alignSelf: "center",
         }}
       >
-        <View style={styles.filterBtnContainer}>
-          <Text style={styles.filterBtnText}>Filter by Date</Text>
-          <Pressable style={styles.filterBtn} onPress={onDatePressHandler}>
-            <Text>{date ? format(date, "dd/MM/yyyy") : "dd/mm/yyyy"}</Text>
-            <Entypo name="calendar" size={20} color="black" />
-          </Pressable>
+        <View style={{ flexDirection: "row", gap: 16 }}>
+          <View style={styles.filterBtnContainer}>
+            <Text style={styles.filterBtnText}>Start Date:</Text>
+            <Pressable
+              style={styles.filterBtn}
+              onPress={onDatePressHandler.bind(this, true)}
+            >
+              <Text>
+                {startDate ? format(startDate, "dd/MM/yyyy") : "dd/mm/yyyy"}
+              </Text>
+              <Entypo name="calendar" size={20} color="black" />
+            </Pressable>
+          </View>
+          <View style={styles.filterBtnContainer}>
+            <Text style={styles.filterBtnText}>End Date:</Text>
+            <Pressable
+              style={styles.filterBtn}
+              onPress={onDatePressHandler.bind(this, false)}
+            >
+              <Text>
+                {endDate ? format(endDate, "dd/MM/yyyy") : "dd/mm/yyyy"}
+              </Text>
+              <Entypo name="calendar" size={20} color="black" />
+            </Pressable>
+          </View>
         </View>
+
         <View style={styles.filterBtnContainer}>
           <Text style={styles.filterBtnText}>Filter by Subject</Text>
           <Pressable
@@ -278,7 +344,9 @@ export default function Home() {
       <TouchableOpacity
         onPress={() => {
           setSelectedSubject("");
-          setDate("");
+          setStartDate(null);
+          setEndDate(null);
+          setRefresh((prev) => prev++);
         }}
         style={styles.clearFilterBtn}
       >
@@ -307,7 +375,16 @@ export default function Home() {
           <Text style={{ fontWeight: "bold", fontSize: 18 }}>
             Absent Summary
           </Text>
-          <Text>Total Absences: {numOfItem}</Text>
+          <Text>Total Absences: {totalAbsences}</Text>
+          <View
+            style={{ borderWidth: 0.5, marginVertical: 8, opacity: 0.1 }}
+          ></View>
+          {subjectTotalAttendance.map(({ count, name }, index) => (
+            <View key={index} style={{ flexDirection: "row", gap: 8 }}>
+              <Text>{name}:</Text>
+              <Text style={{ fontWeight: "bold" }}>{count}</Text>
+            </View>
+          ))}
         </View>
         {!isLoading && (
           <FlatList
@@ -332,7 +409,15 @@ export default function Home() {
           value={date || new Date()}
           mode="date"
           display="default"
-          onChange={onChangeDateHandler}
+          onChange={(e, v) => onChangeDateHandler(e, v, true)}
+        />
+      )}
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={date || new Date()}
+          mode="date"
+          display="default"
+          onChange={(e, v) => onChangeDateHandler(e, v, false)}
         />
       )}
       <SelectModal

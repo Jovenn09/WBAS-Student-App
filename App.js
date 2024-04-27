@@ -105,7 +105,6 @@ function AuthScreen() {
 
 function Root() {
   const { user } = useContext(AuthContext);
-  console.log(user);
   const screen = user ? (
     <>
       <StatusBar style="light" />

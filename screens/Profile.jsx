@@ -44,7 +44,6 @@ export default function Profile() {
 
       if (newError) throw new Error(newError.message);
 
-      console.log(newData);
       setUser(newData.user);
       Alert.alert(
         "Password Changed!",
